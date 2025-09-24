@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amazon Virtual Labor Board</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+    <header>
+        <img src="/static/images/buy-and-large.png" alt="Buy and Large Logo" class="logo">
+        <h1>Virtual Labor Board</h1>
+    </header>
+
+    <main>
+        <div class="controls-container">
+            <div class="date-picker">
+                <label for="date-input">Shift Date:</label>
+                <input type="date" id="date-input" value="{{ current_date }}">
+                <button id="go-button">Go</button>
+            </div>
+            <div class="file-uploader">
+                <label for="file-upload">Upload Roster:</label>
+                <input type="file" id="file-upload" accept=".csv, .xlsx">
+                <button id="upload-button">Upload</button>
+            </div>
+        </div>
+
+        <div class="top-performers-container">
+            <h2>Top Performers for Today</h2>
+            <div class="performers-list">
+                {% if top_performers %}
+                    {% for performer in top_performers %}
+                        <span class="performer-badge">{{ performer.name }}</span>
+                    {% endfor %}
+                {% else %}
+                    <p>No top performers to display yet.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="labor-board-grid">
+            {% for pos_name, count in raw_positions.items() %}
+                <div class="position-group" id="group-{{ pos_name | replace(' ', '-') }}">
+                    <h3>{{ pos_name }} <span class="position-count">({{ count }})</span></h3>
+                    <div class="position-controls">
+                        <button class="add-pos-btn" data-position="{{ pos_name }}">+</button>
+                        {% if count > 1 %}
+                            <button class="remove-pos-btn" data-position="{{ pos_name }}">-</button>
+                        {% endif %}
+                    </div>
+                    {% if count == 1 %}
+                        <div class="position-card" data-position="{{ pos_name }}">
+                            <p>{{ pos_name }}</p>
+                            <select onchange="updatePosition('{{ pos_name }}', this.value)">
+                                <option value="">- Select Associate -</option>
+                                {% for associate in all_associates %}
+                                    <option value="{{ associate }}" {% if positions[pos_name] == associate %}selected{% endif %}>{{ associate }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    {% else %}
+                        {% for i in range(1, count + 1) %}
+                            {% set unique_pos_name = pos_name + ' ' + i|string %}
+                            <div class="position-card" data-position="{{ unique_pos_name }}">
+                                <p>{{ unique_pos_name }}</p>
+                                <select onchange="updatePosition('{{ unique_pos_name }}', this.value)">
+                                    <option value="">- Select Associate -</option>
+                                    {% for associate in all_associates %}
+                                        <option value="{{ associate }}" {% if positions[unique_pos_name] == associate %}selected{% endif %}>{{ associate }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+        
+        <div id="status-message"></div>
+    </main>
+
+    <script src="/static/js/main.js"></script>
+</body>
+</html>
