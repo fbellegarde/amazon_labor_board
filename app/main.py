@@ -48,8 +48,8 @@ def create_unique_positions_list(positions_map: Dict[str, int]) -> List[str]:
 # We will use this to generate the keys for our data store
 # Make this a global variable so we can modify it
 RAW_POSITIONS = {
-    "Taper": 9,
-    "WaterSpider": 9,
+    "Taper": 8,
+    "WaterSpider": 8,
     "Packer": 9,
     "Problem Solve": 2,
     "Process Assistant": 4,

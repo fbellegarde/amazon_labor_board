@@ -30,5 +30,6 @@ resource "docker_container" "labor_board_container" {
   ports {
     internal = 8000
     external = 8000
+    ip = "172.27.96.1" # Add this line
   }
 }
