@@ -1,18 +1,17 @@
-# D:\amazon_labor_board\app\main.py
+import os
+import re
+import json
+import pandas as pd
+from collections import defaultdict
+from datetime import date
+from typing import List, Dict, Any
+import random
 
 from fastapi import FastAPI, Request, File, UploadFile, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
-import pandas as pd
-import os
-import re
-from collections import defaultdict
-import random
-from datetime import date
-from typing import List, Dict, Any
-import json
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -71,17 +70,13 @@ RAW_POSITIONS = {
     "Rebin": 3
 }
 
-# The unique keys for the data store and frontend
-UNIQUE_POSITIONS = create_unique_positions_list(RAW_POSITIONS)
-TOTAL_POSITIONS = len(UNIQUE_POSITIONS)
-
 # Function to save data to a JSON file
 def save_data():
     """Saves the labor_data dictionary to a JSON file."""
     with open(DATA_FILE, "w") as f:
         # Convert defaultdict to a regular dict for JSON serialization
         json.dump(dict(labor_data), f, indent=4)
-        
+
 # Function to load data from a JSON file
 def load_data():
     """Loads the labor_data dictionary from a JSON file."""
@@ -161,10 +156,11 @@ async def get_labor_board(request: Request, date_str: str = str(date.today())):
     """Renders the main labor board page for a given date."""
     
     if date_str not in labor_data:
+        # This will now create a fresh list of positions based on the current RAW_POSITIONS
         labor_data[date_str]['positions'] = {key: "" for key in create_unique_positions_list(RAW_POSITIONS)}
         labor_data[date_str]['all_associates'] = []
         labor_data[date_str]['top_performers'] = []
-        
+    
     positions = labor_data[date_str]['positions']
     all_associates = labor_data[date_str]['all_associates']
     top_performers = labor_data[date_str]['top_performers']
