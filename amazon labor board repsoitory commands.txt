@@ -1,0 +1,3 @@
+git remote add origin https://github.com/fbellegarde/amazon_labor_board.git
+git branch -M main
+git push -u origin main
