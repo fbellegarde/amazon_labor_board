@@ -20,10 +20,10 @@ app = FastAPI(
 )
 
 # Mount static files (CSS, JS, images)
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Initialize Jinja2 templates
-templates = Jinja2Templates(directory="app/templates")
+templates = Jinja2Templates(directory="templates")
 
 # File path for saving the labor board data
 DATA_FILE = "data/labor_board.json"
