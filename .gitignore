@@ -21,3 +21,24 @@ data/
 .terraform.lock.hcl
 terraform.tfstate
 *.tfstate.backup
+
+# Python internals
+__pycache__/
+*.py[cod]
+
+# Virtual Environment
+venv/
+.env
+
+# Local Data (We usually don't commit live data to git)
+data/
+# But we might want to keep the folder structure, just not the json
+!data/.gitkeep
+
+# IDE settings
+.vscode/
+.idea/
+
+# OS generated files
+.DS_Store
+Thumbs.db

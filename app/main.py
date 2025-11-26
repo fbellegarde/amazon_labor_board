@@ -6,6 +6,7 @@ from collections import defaultdict
 from datetime import date
 from typing import List, Dict, Any
 import random
+from pathlib import Path
 
 from fastapi import FastAPI, Request, File, UploadFile, Form
 from fastapi.staticfiles import StaticFiles
@@ -13,39 +14,45 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
+# --- PATH CONFIGURATION (THE FIX) ---
+# Get the directory where this main.py file is located (e.g., .../amazon_labor_board/app)
+BASE_DIR = Path(__file__).resolve().parent
+
+# Get the project root (one level up from app, e.g., .../amazon_labor_board)
+PROJECT_ROOT = BASE_DIR.parent
+
 # Initialize FastAPI app
 app = FastAPI(
     title="Amazon Virtual Labor Board",
     description="A dynamic and interactive labor board for the Pack department.",
 )
 
-# Mount static files (CSS, JS, images)
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# --- MOUNT STATIC & TEMPLATES ---
+# 1. Mount static files (CSS/JS)
+# This assumes your 'static' folder is inside 'app' (sibling to main.py)
+static_path = BASE_DIR / "static"
+# Create static dir if it doesn't exist to prevent crash
+static_path.mkdir(parents=True, exist_ok=True) 
+app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
 
-# Initialize Jinja2 templates
-templates = Jinja2Templates(directory="templates")
+# 2. Initialize Jinja2 templates
+# This assumes your 'templates' folder is inside 'app' (sibling to main.py)
+templates_path = BASE_DIR / "templates"
+templates = Jinja2Templates(directory=str(templates_path))
 
-# File path for saving the labor board data
-DATA_FILE = "data/labor_board.json"
+# --- DATA CONFIGURATION ---
+# Define the data directory and file path
+DATA_DIR = PROJECT_ROOT / "data"
+DATA_FILE = DATA_DIR / "labor_board.json"
+
+# Create the data directory automatically if it doesn't exist
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # Global data store (in-memory for now)
 labor_data = defaultdict(lambda: {'positions': {}, 'top_performers': [], 'total_positions': 0})
 
-# Helper function to generate a flat list of all positions with unique keys
-def create_unique_positions_list(positions_map: Dict[str, int]) -> List[str]:
-    """Flattens the positions map into a list of unique keys."""
-    unique_positions = []
-    for pos_name, count in positions_map.items():
-        if count == 1:
-            unique_positions.append(pos_name)
-        else:
-            for i in range(1, count + 1):
-                unique_positions.append(f"{pos_name} {i}")
-    return unique_positions
-
-# Sample position data based on your specifications
-# We will use this to generate the keys for our data store
-# Make this a global variable so we can modify it
+# Sample position data
+# NOTE: Currently, changes to this structure are NOT saved to disk, only assignments are.
 RAW_POSITIONS = {
     "Taper": 8,
     "WaterSpider": 8,
@@ -70,17 +77,32 @@ RAW_POSITIONS = {
     "Rebin": 3
 }
 
+# Helper function to generate a flat list of all positions with unique keys
+def create_unique_positions_list(positions_map: Dict[str, int]) -> List[str]:
+    """Flattens the positions map into a list of unique keys."""
+    unique_positions = []
+    for pos_name, count in positions_map.items():
+        if count == 1:
+            unique_positions.append(pos_name)
+        else:
+            for i in range(1, count + 1):
+                unique_positions.append(f"{pos_name} {i}")
+    return unique_positions
+
 # Function to save data to a JSON file
 def save_data():
     """Saves the labor_data dictionary to a JSON file."""
-    with open(DATA_FILE, "w") as f:
-        # Convert defaultdict to a regular dict for JSON serialization
-        json.dump(dict(labor_data), f, indent=4)
+    try:
+        with open(DATA_FILE, "w") as f:
+            # Convert defaultdict to a regular dict for JSON serialization
+            json.dump(dict(labor_data), f, indent=4)
+    except Exception as e:
+        print(f"Error saving data: {e}")
 
 # Function to load data from a JSON file
 def load_data():
     """Loads the labor_data dictionary from a JSON file."""
-    if os.path.exists(DATA_FILE):
+    if DATA_FILE.exists():
         with open(DATA_FILE, "r") as f:
             try:
                 data = json.load(f)
@@ -96,8 +118,13 @@ load_data()
 # Simple Content-Based Recommender (Dummy version for now)
 def recommend_associates(date_str: str, position: str) -> List[str]:
     """Recommends associates for a given position on a specific date."""
+    if date_str not in labor_data or 'all_associates' not in labor_data[date_str]:
+        return []
+        
     all_associates = list(labor_data[date_str]['all_associates'])
     random.shuffle(all_associates)
+    
+    # Get list of currently assigned associates to exclude them
     assigned = [pos for pos in labor_data[date_str]['positions'].values() if pos]
     return [assoc for assoc in all_associates if assoc not in assigned]
 
@@ -107,7 +134,11 @@ def get_top_performers(df: pd.DataFrame) -> List[Dict[str, Any]]:
     if 'Performance' not in df.columns:
         return []
     high_performers = df[df['Performance'] == 'High'].copy()
-    high_performers['count'] = high_performers.groupby('Associate Name')['Associate Name'].transform('count')
+    if high_performers.empty:
+        return []
+        
+    # Fixed deprecation warning for count/transform
+    # Simply getting unique high performers
     top_performers = high_performers['Associate Name'].unique().tolist()
     random.shuffle(top_performers)
     return [{"name": name} for name in top_performers[:3]]
@@ -116,37 +147,48 @@ def get_top_performers(df: pd.DataFrame) -> List[Dict[str, Any]]:
 @app.post("/uploadfile/")
 async def upload_file(file: UploadFile = File(...)):
     """Handles the upload of a CSV or Excel file."""
-    file_path = f"data/{file.filename}"
+    # Use the absolute DATA_DIR path
+    file_path = DATA_DIR / file.filename
+    
     try:
         with open(file_path, "wb") as f:
             f.write(await file.read())
         
-        df = pd.read_csv(file_path) if file_path.endswith('.csv') else pd.read_excel(file_path, engine='openpyxl')
+        # Determine file type
+        if str(file_path).endswith('.csv'):
+            df = pd.read_csv(file_path) 
+        elif str(file_path).endswith(('.xls', '.xlsx')):
+            df = pd.read_excel(file_path, engine='openpyxl')
+        else:
+            if file_path.exists():
+                os.remove(file_path)
+            return {"message": "Error: Unsupported file type. Use CSV or Excel.", "status": "error"}
         
         if df is not None:
             df.columns = [col.strip() for col in df.columns]
             
             required_cols = ['Date', 'Associate Name', 'Performance']
             if not all(col in df.columns for col in required_cols):
-                os.remove(file_path)
-                return {"message": "Error: Missing required columns.", "status": "error"}
+                if file_path.exists():
+                    os.remove(file_path)
+                return {"message": f"Error: Missing required columns: {required_cols}", "status": "error"}
 
             for date_str, group in df.groupby('Date'):
-                labor_data[date_str]['all_associates'] = group['Associate Name'].unique().tolist()
-                labor_data[date_str]['top_performers'] = get_top_performers(group)
-                labor_data[date_str]['positions'] = {key: "" for key in create_unique_positions_list(RAW_POSITIONS)}
+                # Ensure the date string is formatted correctly if it's a timestamp
+                date_key = str(date_str).split(" ")[0] # simpler date format
+                
+                labor_data[date_key]['all_associates'] = group['Associate Name'].unique().tolist()
+                labor_data[date_key]['top_performers'] = get_top_performers(group)
+                labor_data[date_key]['positions'] = {key: "" for key in create_unique_positions_list(RAW_POSITIONS)}
             
             # Save the updated data
             save_data()
-        else:
-            os.remove(file_path)
-            return {"message": "Error: Unsupported file type.", "status": "error"}
-
+        
     except Exception as e:
-        if os.path.exists(file_path):
+        if file_path.exists():
             os.remove(file_path)
         print(f"An unexpected error occurred: {e}")
-        return {"message": f"An unexpected error occurred: {e}", "status": "error"}
+        return {"message": f"An unexpected error occurred: {str(e)}", "status": "error"}
 
     return {"filename": file.filename, "message": "File processed successfully!", "status": "success"}
 
@@ -166,7 +208,12 @@ async def get_labor_board(request: Request, date_str: str = str(date.today())):
     top_performers = labor_data[date_str]['top_performers']
     
     recommendations = {}
-    for pos_key in create_unique_positions_list(RAW_POSITIONS):
+    unique_pos_keys = create_unique_positions_list(RAW_POSITIONS)
+    
+    for pos_key in unique_pos_keys:
+        # Ensure the position key exists in the data (in case RAW_POSITIONS changed)
+        if pos_key not in positions:
+            positions[pos_key] = ""
         recommendations[pos_key] = recommend_associates(date_str, pos_key)
     
     return templates.TemplateResponse(
@@ -192,25 +239,19 @@ class PositionUpdate(BaseModel):
 async def update_position_count(data: PositionUpdate):
     global RAW_POSITIONS
     
-    if data.position in RAW_POSITIONS and RAW_POSITIONS[data.position] > 1:
+    if data.position in RAW_POSITIONS:
         if data.action == 'add':
             RAW_POSITIONS[data.position] += 1
+            # Note: We need to trigger a save or update the logic to persist RAW_POSITIONS
+            # For now, this is in-memory only per your original script
         elif data.action == 'remove' and RAW_POSITIONS[data.position] > 1:
             RAW_POSITIONS[data.position] -= 1
-        
-        # Save the updated data after a change
-        save_data()
-        
-        return {"message": f"{data.position} count updated to {RAW_POSITIONS[data.position]}."}
-    
-    elif data.position in RAW_POSITIONS and RAW_POSITIONS[data.position] == 1 and data.action == 'add':
-        RAW_POSITIONS[data.position] += 1
-        save_data()
+            
         return {"message": f"{data.position} count updated to {RAW_POSITIONS[data.position]}."}
     
     return {"message": "Position not found or cannot be removed.", "status": "error"}
 
-# Route to handle updating a position
+# Route to handle updating a position assignment
 @app.post("/update_position/")
 async def update_position(request: Request):
     form_data = await request.form()
@@ -218,8 +259,13 @@ async def update_position(request: Request):
     position = form_data.get("position")
     associate = form_data.get("associate")
     
-    if date_str and position in labor_data.get(date_str, {}).get("positions", {}):
+    if date_str and position:
+        # Initialize if date doesn't exist
+        if date_str not in labor_data:
+             labor_data[date_str]['positions'] = {}
+
         labor_data[date_str]['positions'][position] = associate
+        
         # Save the updated data after a change
         save_data()
         return {"status": "success", "message": f"Updated {position} with {associate}"}

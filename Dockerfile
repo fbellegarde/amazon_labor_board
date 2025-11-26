@@ -1,25 +1,26 @@
-# D:\amazon_labor_board\Dockerfile
-
-# Use an official Python runtime as a parent image
+# Use an official Python runtime
 FROM python:3.12-slim-bullseye
 
-# Create the working directory for your application in the container
-WORKDIR /app
+# Set the working directory to /code
+# We use /code instead of /app to avoid confusion with your inner 'app' folder
+WORKDIR /code
 
-# Copy the app folder content into the container's /app directory
-COPY ./app /app
+# Install system dependencies (needed for some pandas/excel operations)
+RUN apt-get update && apt-get install -y gcc
 
-# Install any needed packages specified in requirements.txt
-# Assuming requirements.txt is in the D:\amazon_labor_board directory
+# Copy requirements first (for Docker caching)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Make port 8000 available to the world outside this container
-EXPOSE 8000
+# Copy the app folder into /code/app
+COPY ./app /code/app
 
-# Define environment variable for running in production
-ENV UVICORN_HOST=0.0.0.0
+# Create the data directory inside the container so permissions are ready
+RUN mkdir -p /code/data
 
-# Run the uvicorn server with the application
-# Now the path is just 'main' because the content is directly in /app
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Expose the port you want
+EXPOSE 8090
+
+# Run uvicorn
+# Note the path: app.main:app because main.py is inside the app folder
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8090"]

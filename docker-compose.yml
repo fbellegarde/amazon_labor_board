@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  laborboard:
+    build: .
+    container_name: laborboard_app
+    ports:
+      - "8090:8090"
+    volumes:
+      # Map the local data folder to the container so JSON saves persist
+      - ./data:/code/data
+      # OPTIONAL: Map the app folder for "Hot Reloading" during development
+      # If you uncomment this, changes you make in VS Code appear instantly without rebuilding
+      # - ./app:/code/app
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  db:
+    image: postgres:15-alpine
+    container_name: laborboard_db
+    environment:
+      POSTGRES_USER: laborboard
+      POSTGRES_PASSWORD: laborboard123
+      POSTGRES_DB: laborboard_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
